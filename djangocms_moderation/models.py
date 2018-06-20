@@ -324,7 +324,17 @@ class PageModerationRequest(models.Model):
         verbose_name_plural = _('Requests')
 
     def __str__(self):
-        return self.page.get_page_title(self.language)
+        return "{} {}".format(
+            self.reference_number,
+            self.page.get_page_title(self.language)
+        )
+
+    @cached_property
+    def author(self):
+        """
+        Author of this request is the user who created the first action
+        """
+        return self.get_first_action().by_user
 
     @cached_property
     def has_pending_step(self):
@@ -341,16 +351,30 @@ class PageModerationRequest(models.Model):
     @transaction.atomic
     def update_status(self, action, by_user, message='', to_user=None):
         is_approved = action == constants.ACTION_APPROVED
+        is_rejected = action == constants.ACTION_REJECTED
 
         if is_approved:
             step_approved = self.user_get_step(by_user)
         else:
             step_approved = None
 
-        self.is_active = action == constants.ACTION_APPROVED
+        if is_rejected:
+            # This workflow is now rejected, so it needs to be resubmitted by
+            # the content author, so lets mark all the actions taken
+            # so far as stale ones. They need to be re-taken
+            self.actions.all().update(is_stale=True)
+
+        # If request is Rejected or Resubmitted, it still counts as active
+        # as rejected means it is submitted back to the content author
+        # to make the changes
+        self.is_active = action in (
+            constants.ACTION_APPROVED,
+            constants.ACTION_REJECTED,
+            constants.ACTION_RESUBMITTED,
+        )
         self.save(update_fields=['is_active'])
 
-        new_action =self.actions.create(
+        new_action = self.actions.create(
             by_user=by_user,
             to_user=to_user,
             action=action,
@@ -372,7 +396,7 @@ class PageModerationRequest(models.Model):
         steps_approved = (
             self
             .actions
-            .filter(step_approved__isnull=False)
+            .filter(step_approved__isnull=False, is_stale=False)
             .values_list('step_approved__pk', flat=True)
         )
         return self.workflow.steps.exclude(pk__in=steps_approved)
@@ -389,7 +413,31 @@ class PageModerationRequest(models.Model):
                 return step
         return None
 
-    def user_can_take_action(self, user):
+    def user_can_edit_and_resubmit(self, user):
+        """
+        Lets workout if the user can edit and then resubmit the content for
+        moderation again. This might happen if the moderation request was
+        rejected by the moderator and submitted back to the content author
+        for amends
+        """
+        return all([
+            # Only original content author can edit
+            self.author == user,
+            # And only if the request has been rejected
+            self.get_last_action().action == constants.ACTION_REJECTED,
+        ])
+
+    def user_can_take_moderation_action(self, user):
+        """
+        Can this user approve or reject the moderation request?
+        """
+
+        if self.get_last_action().action == constants.ACTION_REJECTED:
+            # If the last action was a rejection, then they can't approve or
+            # reject the current action (content author can now act on the
+            # feedback and resubmit the edits for moderation
+            return False
+
         pending_steps = self.get_pending_steps().select_related('role')
 
         for step in pending_steps.iterator():
@@ -419,19 +467,12 @@ class PageModerationRequest(models.Model):
 
 @python_2_unicode_compatible
 class PageModerationRequestAction(models.Model):
-    STATUSES = (
-        (constants.ACTION_STARTED, _('Started')),
-        (constants.ACTION_REJECTED, _('Rejected')),
-        (constants.ACTION_APPROVED, _('Approved')),
-        (constants.ACTION_CANCELLED, _('Cancelled')),
-        (constants.ACTION_FINISHED, _('Finished')),
-    )
-
     action = models.CharField(
         verbose_name=_('status'),
         max_length=30,
-        choices=STATUSES,
+        choices=constants.ACTION_CHOICES,
     )
+    # User who created this action
     by_user = models.ForeignKey(
         to=settings.AUTH_USER_MODEL,
         verbose_name=_('by user'),
@@ -446,6 +487,7 @@ class PageModerationRequestAction(models.Model):
         related_name='+',
         on_delete=models.CASCADE,
     )
+    # Role which is next in the moderation flow
     to_role = models.ForeignKey(
         to=Role,
         verbose_name=_('to role'),
@@ -454,6 +496,8 @@ class PageModerationRequestAction(models.Model):
         related_name='+',
         on_delete=models.CASCADE,
     )
+
+    # This is the step which approved the moderation request
     step_approved = models.ForeignKey(
         to=WorkflowStep,
         verbose_name=_('step approved'),
@@ -475,33 +519,52 @@ class PageModerationRequestAction(models.Model):
         auto_now_add=True,
     )
 
+    # Action can become "stale" if the moderation request has been rejected
+    # and re-assigned to the content author for their resubmission.
+    # In this scenario, all the actions have to be retaken, so we mark the
+    # existing ones as "stale" (outdated)
+    is_stale = models.BooleanField(default=False)
+
     class Meta:
         ordering = ('date_taken',)
         verbose_name = _('Action')
         verbose_name_plural = _('Actions')
 
     def __str__(self):
-        return self.get_action_display()
+        return "{} - {} - {}".format(
+            self.date_taken.strftime("%Y-%m-%d %H:%M:%S"),
+            self.request.reference_number,
+            self.get_action_display()
+        )
 
     def get_by_user_name(self):
-        user = self.by_user
-        return user.get_full_name() or getattr(user, user.USERNAME_FIELD)
+        return self._get_user_name(self.by_user)
 
     def get_to_user_name(self):
-        user = self.to_user
+        return self._get_user_name(self.to_user)
+
+    def _get_user_name(self, user):
         return user.get_full_name() or getattr(user, user.USERNAME_FIELD)
 
     def save(self, **kwargs):
-        if self.to_user:
-            next_step = self.request.user_get_step(self.to_user)
-        elif self.action == constants.ACTION_STARTED:
-            next_step = self.request.workflow.first_step
-        else:
-            next_step = self.request.user_get_step(self.by_user)
-            next_step = next_step.get_next() if next_step else None
+        """
+        The point of this is to workout the "to Role",
+        so we know which role will be approving the request next, if any
+        """
 
-        if next_step:
-            self.to_role_id = next_step.role_id
+        # If we are rejecting, then we don't need to workout the `to_role`,
+        # as only content author will amend and resubmit the changes
+        if self.action != constants.ACTION_REJECTED:
+            if self.to_user:
+                next_step = self.request.user_get_step(self.to_user)
+            elif self.action in (constants.ACTION_STARTED, constants.ACTION_RESUBMITTED):
+                next_step = self.request.workflow.first_step
+            else:
+                current_step = self.request.user_get_step(self.by_user)
+                next_step = current_step.get_next() if current_step else None
+
+            if next_step:
+                self.to_role_id = next_step.role_id
         super(PageModerationRequestAction, self).save(**kwargs)
 
 

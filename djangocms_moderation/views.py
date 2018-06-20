@@ -1,6 +1,5 @@
 from __future__ import unicode_literals
 
-from django.conf import settings
 from django.contrib import messages
 from django.core.urlresolvers import reverse
 from django.http import (
@@ -12,11 +11,8 @@ from django.shortcuts import get_object_or_404, render
 from django.utils.translation import ugettext_lazy as _
 from django.views.generic import FormView
 
-from cms.models import Page
-from cms.page_rendering import render_page
 from cms.utils.urlutils import add_url_parameters
 
-from . import conf
 from . import constants
 from .forms import (
     ModerationRequestForm,
@@ -25,7 +21,6 @@ from .forms import (
 )
 from .helpers import (
     get_active_moderation_request,
-    get_form_submission_for_step,
     get_page_moderation_workflow,
     get_page_or_404,
     get_workflow_or_none,
@@ -62,7 +57,7 @@ class ModerationRequestView(FormView):
                 # Can't reject or approve a moderation request whose steps have all
                 # already been approved.
                 return HttpResponseBadRequest('Moderation request has already been approved.')
-            elif needs_ongoing and not self.active_request.user_can_take_action(user):
+            elif needs_ongoing and not self.active_request.user_can_take_moderation_action(user):
                 # User can't approve or reject a request where he's not part of the workflow
                 return HttpResponseForbidden('User is not allowed to update request.')
             elif self.action == constants.ACTION_APPROVED:
@@ -157,9 +152,9 @@ cancel_moderation_request = ModerationRequestView.as_view(
 
 reject_moderation_request = ModerationRequestView.as_view(
     action=constants.ACTION_REJECTED,
-    page_title=_('Reject changes'),
+    page_title=_('Assign back to the content author'),
     form_class=UpdateModerationRequestForm,
-    success_message=_('The moderation request has been rejected.'),
+    success_message=_('The moderation request has been assigned back to the content author.'),
 )
 
 approve_moderation_request = ModerationRequestView.as_view(
@@ -167,6 +162,13 @@ approve_moderation_request = ModerationRequestView.as_view(
     page_title=_('Approve changes'),
     form_class=UpdateModerationRequestForm,
     success_message=_('The changes have been approved.'),
+)
+
+resubmit_moderation_request = ModerationRequestView.as_view(
+    action=constants.ACTION_RESUBMITTED,
+    page_title=_('Resubmit changes'),
+    form_class=UpdateModerationRequestForm,
+    success_message=_('The request has been re-submitted.'),
 )
 
 
@@ -225,7 +227,7 @@ def moderation_confirmation_page(request, confirmation_id):
 
     context = {
         'opts': ConfirmationPage._meta,
-        'app_label': ConfirmationPage._meta.app_label, 
+        'app_label': ConfirmationPage._meta.app_label,
         'change': True,
         'add': False,
         'is_popup': True,
@@ -238,7 +240,7 @@ def moderation_confirmation_page(request, confirmation_id):
         'content_view': content_view,
         'CONFIRMATION_BASE_TEMPLATE': base_template,
     }
-    
+
     if request.method == 'POST' and page_id and language:
         context['submitted'] = True
         context['redirect_url'] = add_url_parameters(
