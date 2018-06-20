@@ -70,17 +70,19 @@ We need to install the `djangocms 3.4.3` (or higher) and then add this repositor
 11. Go to the main project folder  ``cd ~/workspace/testproject`` and install the
     package from your local folder
 
-    `pip install -e ~/workspace/djangocms-moderation/`
+    ``pip install -e ~/workspace/djangocms-moderation/``
 
 12. Add ``djangocms_moderation`` and ``adminsortable2`` to the INSTALLED_APPS in settings.py
 
-13. `python manage.py migrate`
-
-14. Running tests - you can do this straight from your ``~/workspace/djangocms-moderation/``
-directory by running
-
-    You might need to install `pip install djangocms-helper`
-    `python setup.py test`
+13. Run migrations ``python manage.py migrate``
 
 Now you can make changes to your local `~/workspace/djangocms-moderation/`
 repository and changes will be reflected in your `testproject`.
+
+Running test
+============
+You can do this straight from your ``~/workspace/djangocms-moderation/``
+
+1. Install ``pip install djangocms-helper``
+2. Install test requirements by running ``pip install -r test/requirements.txt``
+3. Run tests ``python setup.py test``
