@@ -1,8 +1,22 @@
+import json
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.urlresolvers import reverse
 
-from djangocms_moderation.models import *
+from cms.api import create_page
+
+from djangocms_moderation import constants
+from djangocms_moderation.models import (
+    ConfirmationFormSubmission,
+    ConfirmationPage,
+    PageModerationRequest,
+    PageModerationRequestAction,
+    Role,
+    Workflow,
+    WorkflowStep,
+)
 
 from .utils import BaseTestCase
 
@@ -26,10 +40,15 @@ class RoleTest(BaseTestCase):
     def test_get_users_queryset(self):
         # with user
         role = Role.objects.create(name='New Role 1', user=self.user,)
-        self.assertQuerysetEqual(role.get_users_queryset(), User.objects.filter(pk=self.user.pk), transform=lambda x: x, ordered=False)
+        self.assertQuerysetEqual(
+            role.get_users_queryset(), User.objects.filter(pk=self.user.pk), transform=lambda x: x, ordered=False)
         # with group
         role = Role.objects.create(name='New Role 2', group=self.group,)
-        self.assertQuerysetEqual(role.get_users_queryset(), User.objects.filter(pk__in=[self.user2.pk, self.user3.pk]), transform=lambda x: x, ordered=False)
+        self.assertQuerysetEqual(
+            role.get_users_queryset(), User.objects.filter(
+                pk__in=[self.user2.pk, self.user3.pk]
+            ), transform=lambda x: x, ordered=False
+        )
 
 
 class WorkflowTest(BaseTestCase):
@@ -37,8 +56,10 @@ class WorkflowTest(BaseTestCase):
     def test_multiple_defaults_validation_error(self):
         workflow = Workflow.objects.create(name='New Workflow 3', is_default=False,)
         workflow.clean()
-        workflow = Workflow.objects.create(name='New Workflow 4', is_default=True,) # self.wf1 is default
-        self.assertRaisesMessage(ValidationError, 'Can\'t have two default workflows, only one is allowed.', workflow.clean)
+        workflow = Workflow.objects.create(name='New Workflow 4', is_default=True,)  # self.wf1 is default
+        self.assertRaisesMessage(
+            ValidationError, 'Can\'t have two default workflows, only one is allowed.', workflow.clean
+        )
 
     def test_first_step(self):
         self.assertEqual(self.wf1.first_step, self.wf1st1)
@@ -51,7 +72,12 @@ class WorkflowTest(BaseTestCase):
             language='en',
             message='Some message',
         )
-        self.assertQuerysetEqual(request.actions.all(), PageModerationRequestAction.objects.filter(request=request), transform=lambda x: x, ordered=False)
+        self.assertQuerysetEqual(
+            request.actions.all(),
+            PageModerationRequestAction.objects.filter(request=request),
+            transform=lambda x: x,
+            ordered=False,
+        )
         mock_nrm.assert_called_once()
 
 
@@ -92,11 +118,26 @@ class PageModerationRequestTest(BaseTestCase):
         self.assertEqual(self.moderation_request2.get_last_action(), self.moderation_request2.actions.last())
 
     def test_get_pending_steps(self):
-        self.assertQuerysetEqual(self.moderation_request3.get_pending_steps(), WorkflowStep.objects.filter(pk__in=[self.wf3st2.pk]), transform=lambda x: x, ordered=False)
+        self.assertQuerysetEqual(
+            self.moderation_request3.get_pending_steps(),
+            WorkflowStep.objects.filter(pk__in=[self.wf3st2.pk]),
+            transform=lambda x: x,
+            ordered=False,
+        )
 
     def test_get_pending_required_steps(self):
-        self.assertQuerysetEqual(self.moderation_request1.get_pending_required_steps(), WorkflowStep.objects.filter(pk__in=[self.wf1st1.pk, self.wf1st3.pk]), transform=lambda x: x, ordered=False)
-        self.assertQuerysetEqual(self.moderation_request3.get_pending_required_steps(), WorkflowStep.objects.none(), transform=lambda x: x, ordered=False)
+        self.assertQuerysetEqual(
+            self.moderation_request1.get_pending_required_steps(),
+            WorkflowStep.objects.filter(pk__in=[self.wf1st1.pk, self.wf1st3.pk]),
+            transform=lambda x: x,
+            ordered=False,
+        )
+        self.assertQuerysetEqual(
+            self.moderation_request3.get_pending_required_steps(),
+            WorkflowStep.objects.none(),
+            transform=lambda x: x,
+            ordered=False,
+        )
 
     def test_get_next_required(self):
         self.assertEqual(self.moderation_request1.get_next_required(), self.wf1st1)
@@ -111,6 +152,28 @@ class PageModerationRequestTest(BaseTestCase):
         self.assertFalse(self.moderation_request1.user_can_take_action(temp_user))
         self.assertFalse(self.moderation_request3.user_can_take_action(self.user))
         self.assertTrue(self.moderation_request3.user_can_take_action(self.user2))
+
+    def test_user_can_moderate(self):
+        temp_user = User.objects.create_superuser(username='temp', email='temp@temp.com', password='temp',)
+        self.assertFalse(self.moderation_request1.user_can_moderate(temp_user))
+        self.assertFalse(self.moderation_request2.user_can_moderate(temp_user))
+        self.assertFalse(self.moderation_request3.user_can_moderate(temp_user))
+
+        # check that it doesn't allow access to users that aren't part of this moderation request
+        self.pg5 = create_page(title='Page 5', template='page.html', language='en',)
+        self.user4 = User.objects.create_superuser(username='test4', email='test4@test.com', password='test4',)
+        self.role4 = Role.objects.create(name='Role 4', user=self.user4,)
+        self.wf4 = Workflow.objects.create(pk=4, name='Workflow 4',)
+        self.wf4st1 = self.wf4.steps.create(role=self.role4, is_required=True, order=1,)
+        self.wf4st2 = self.wf4.steps.create(role=self.role1, is_required=False, order=2,)
+        self.moderation_request4 = PageModerationRequest.objects.create(
+            page=self.pg5, language='en', workflow=self.wf4, is_active=True,)
+        self.moderation_request4.actions.create(by_user=self.user, action=constants.ACTION_STARTED,)
+
+        self.assertTrue(self.moderation_request4.user_can_moderate(self.user))
+        self.assertFalse(self.moderation_request4.user_can_moderate(self.user2))
+        self.assertFalse(self.moderation_request4.user_can_moderate(self.user3))
+        self.assertTrue(self.moderation_request4.user_can_moderate(self.user4))
 
     @patch('djangocms_moderation.models.notify_request_author')
     @patch('djangocms_moderation.models.notify_requested_moderator')
@@ -184,3 +247,60 @@ class PageModerationRequestActionTest(BaseTestCase):
             step_approved=self.wf1st1,
         )
         self.assertEqual(new_action.to_role, self.role2)
+
+
+class ConfirmationPageTest(BaseTestCase):
+
+    def setUp(self):
+        # First delete all the form submissions for the moderation_request1
+        # This will make sure there are no form submissions
+        # attached with the self.moderation_request1
+        self.moderation_request1.form_submissions.all().delete()
+        self.cp = ConfirmationPage.objects.create(
+            name='Checklist Form',
+        )
+        self.role1.confirmation_page = self.cp
+        self.role1.save()
+
+    def test_get_absolute_url(self):
+        url = reverse('admin:cms_moderation_confirmation_page', args=(self.cp.pk,))
+        self.assertEqual(self.cp.get_absolute_url(), url)
+
+    def test_is_valid_returns_false_when_no_form_submission(self):
+        result = self.cp.is_valid(active_request=self.moderation_request1, for_step=self.wf1st1,)
+        self.assertFalse(result)
+
+    def test_is_valid_returns_true_when_form_submission_exists(self):
+        cfs = ConfirmationFormSubmission.objects.create(
+            request=self.moderation_request1,
+            for_step=self.wf1st1,
+            by_user=self.user,
+            data=json.dumps([{'label': 'Question 1', 'answer': 'Yes'}]),
+            confirmation_page=self.cp,
+        )
+        result = self.cp.is_valid(active_request=self.moderation_request1, for_step=self.wf1st1,)
+        self.assertTrue(result)
+
+    def test_is_valid_returns_false_when_plain_content_not_reviewed(self):
+        result = self.cp.is_valid(active_request=self.moderation_request1, for_step=self.wf1st1,)
+        self.assertFalse(result)
+
+
+class ConfirmationFormSubmissionTest(BaseTestCase):
+
+    def setUp(self):
+        self.cp = ConfirmationPage.objects.create(
+            name='Checklist Form',
+        )
+        self.role1.confirmation_page = self.cp
+        self.role1.save()
+
+    def test_get_by_user_name(self):
+        cfs = ConfirmationFormSubmission.objects.create(
+            request=self.moderation_request1,
+            for_step=self.wf1st1,
+            by_user=self.user,
+            data=json.dumps([{'label': 'Question 1', 'answer': 'Yes'}]),
+            confirmation_page=self.cp,
+        )
+        self.assertEqual(cfs.get_by_user_name(), self.user.username)
