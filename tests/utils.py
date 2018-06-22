@@ -5,7 +5,6 @@ from cms.api import create_page
 
 from djangocms_moderation import constants
 from djangocms_moderation.models import (
-    ConfirmationPage,
     PageModerationRequest,
     Role,
     Workflow,

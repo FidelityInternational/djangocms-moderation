@@ -16,6 +16,7 @@ from cms.utils.conf import get_cms_setting
 from . import constants
 from .utils import get_absolute_url
 
+from django.urls import reverse
 
 email_subjects = {
     constants.ACTION_APPROVED: _('Changes Approved'),
@@ -38,7 +39,7 @@ def _send_email(request, action, recipients, subject, template):
         moderator_name = ''
 
     site = page.node.site
-    admin_url = reverse('admin:djangocms_moderation_pagemoderationrequest_change', args=(request.pk, ))
+    admin_url = reverse('admin:djangocms_moderation_pagemoderationrequest_change', args=(request.pk,))
     context = {
         'page': page,
         'page_url': get_absolute_url(page_url, site),
@@ -69,15 +70,13 @@ def notify_request_author(request, action):
         # TODO: FINISH THIS
         return 0
 
-    author = request.get_first_action().by_user
-
-    if not author.email:
+    if not request.author.email:
         return 0
 
     status = _send_email(
         request=request,
         action=action,
-        recipients=[author.email],
+        recipients=[request.author.email],
         subject=email_subjects[action.action],
         template='{}.txt'.format(action.action),
     )
