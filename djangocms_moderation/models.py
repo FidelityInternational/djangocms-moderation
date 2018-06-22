@@ -407,6 +407,14 @@ class PageModerationRequest(models.Model):
                 return True
         return False
 
+    def user_can_moderate_or_is_author(self, user):
+        """
+        Checks if the user is part of the moderation workflow at any point
+        or if they are an author of the moderation request
+        """
+        author = user == self.get_first_action().by_user
+        return author or self.user_can_moderate(user)
+
     def save(self, **kwargs):
         if not self.reference_number:
             self.reference_number = generate_reference_number(
