@@ -360,7 +360,7 @@ class PageModerationRequestTest(BaseTestCase):
             workflow=self.wf2,
         )
         request.refresh_from_db()
-        expected = "{}".format(request.pk)
+        expected = str(request.pk)
         self.assertEqual(request.reference_number, expected)
 
 
