@@ -317,6 +317,7 @@ class PageModerationRequest(models.Model):
         max_length=32,
         null=True,
         unique=True,
+        db_index=True,
     )
 
     class Meta:
