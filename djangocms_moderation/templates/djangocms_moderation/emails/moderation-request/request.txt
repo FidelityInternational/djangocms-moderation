@@ -3,7 +3,6 @@
 Hello {{ moderator_name }}, {{ by_user_name }} has requested your approval for changes in {{ page_url }}.
 {% endblocktrans %}
 
-
 {% if comment %}
 Comment: <br/>
 {{ comment }} <br/>
