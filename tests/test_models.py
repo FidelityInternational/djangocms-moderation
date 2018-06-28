@@ -353,7 +353,7 @@ class PageModerationRequestTest(BaseTestCase):
         self.assertEqual(request.reference_number, 'abc123')
 
     def test_reference_number_sequential_number_backend(self):
-        self.wf2.reference_number_backend = 'djangocms_moderation.backends.sequential_number_backed'
+        self.wf2.reference_number_backend = 'djangocms_moderation.backends.sequential_number_backend'
         request = PageModerationRequest.objects.create(
             page=self.pg1,
             language='en',

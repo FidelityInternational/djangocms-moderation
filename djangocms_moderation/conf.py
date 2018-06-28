@@ -4,7 +4,7 @@ from django.utils.translation import ugettext_lazy as _
 
 CORE_REFERENCE_NUMBER_BACKENDS = (
     ('djangocms_moderation.backends.uuid4_backend', _('Unique alpha-numeric string')),
-    ('djangocms_moderation.backends.sequential_number_backed', _('Sequential number'))
+    ('djangocms_moderation.backends.sequential_number_backend', _('Sequential number'))
 )
 
 DEFAULT_REFERENCE_NUMBER_BACKEND = getattr(settings, 'CMS_MODERATION_DEFAULT_REFERENCE_NUMBER_BACKEND', CORE_REFERENCE_NUMBER_BACKENDS[0][0])
