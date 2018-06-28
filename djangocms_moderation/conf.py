@@ -1,13 +1,15 @@
 from django.conf import settings
 from django.utils.translation import ugettext_lazy as _
 
+UUID_BACKEND = 'djangocms_moderation.backends.uuid4_backend'
+SEQUENTIAL_BACKEND = 'djangocms_moderation.backends.sequential_number_backend'
 
 CORE_REFERENCE_NUMBER_BACKENDS = (
-    ('djangocms_moderation.backends.uuid4_backend', _('Unique alpha-numeric string')),
-    ('djangocms_moderation.backends.sequential_number_backend', _('Sequential number'))
+    (UUID_BACKEND, _('Unique alpha-numeric string')),
+    (SEQUENTIAL_BACKEND, _('Sequential number'))
 )
 
-DEFAULT_REFERENCE_NUMBER_BACKEND = getattr(settings, 'CMS_MODERATION_DEFAULT_REFERENCE_NUMBER_BACKEND', CORE_REFERENCE_NUMBER_BACKENDS[0][0])
+DEFAULT_REFERENCE_NUMBER_BACKEND = getattr(settings, 'CMS_MODERATION_DEFAULT_REFERENCE_NUMBER_BACKEND', UUID_BACKEND)
 
 REFERENCE_NUMBER_BACKENDS = getattr(settings, 'CMS_MODERATION_REFERENCE_NUMBER_BACKENDS', CORE_REFERENCE_NUMBER_BACKENDS)
 
