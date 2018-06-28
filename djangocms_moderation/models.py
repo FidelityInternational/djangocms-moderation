@@ -464,13 +464,15 @@ class PageModerationRequest(models.Model):
         return self.user_is_author(user) or self.user_can_moderate(user)
 
     def save(self, **kwargs):
+        super(PageModerationRequest, self).save(**kwargs)
+
         if not self.reference_number:
             self.reference_number = generate_reference_number(
                 self.workflow.reference_number_backend,
                 moderation_request=self,
             )
+            self.save(update_fields=['reference_number'])
 
-        super(PageModerationRequest, self).save(**kwargs)
 
 
 @python_2_unicode_compatible

@@ -349,7 +349,19 @@ class PageModerationRequestTest(BaseTestCase):
             workflow=self.wf1,
         )
         mock_uuid.assert_called_once()
+        request.refresh_from_db()
         self.assertEqual(request.reference_number, 'abc123')
+
+    def test_reference_number_sequential_number_backend(self):
+        self.wf2.reference_number_backend = 'djangocms_moderation.backends.sequential_number_backed'
+        request = PageModerationRequest.objects.create(
+            page=self.pg1,
+            language='en',
+            workflow=self.wf2,
+        )
+        request.refresh_from_db()
+        expected = "{}".format(request.pk)
+        self.assertEqual(request.reference_number, expected)
 
 
 class PageModerationRequestActionTest(BaseTestCase):
