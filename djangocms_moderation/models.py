@@ -317,6 +317,7 @@ class PageModerationRequest(models.Model):
         max_length=32,
         null=True,
         unique=True,
+        db_index=True,
     )
 
     class Meta:
@@ -464,13 +465,17 @@ class PageModerationRequest(models.Model):
         return self.user_is_author(user) or self.user_can_moderate(user)
 
     def save(self, **kwargs):
+        # Some reference number backends might require a saved moderation
+        # request, to utilise its `pk` for example.
+        # So let's save first, so we can be sure that we have a primary key.
+        super(PageModerationRequest, self).save(**kwargs)
+
         if not self.reference_number:
             self.reference_number = generate_reference_number(
                 self.workflow.reference_number_backend,
                 moderation_request=self,
             )
-
-        super(PageModerationRequest, self).save(**kwargs)
+            self.save(update_fields=['reference_number'])
 
 
 @python_2_unicode_compatible
