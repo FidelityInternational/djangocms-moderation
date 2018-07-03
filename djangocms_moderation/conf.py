@@ -2,21 +2,19 @@ from django.conf import settings
 from django.utils.translation import ugettext_lazy as _
 
 
-DEFAULT_REFERENCE_NUMBER_BACKEND = getattr(
-    settings,
-    'CMS_MODERATION_DEFAULT_REFERENCE_NUMBER_BACKEND',
-    'djangocms_moderation.backends.uuid4_backend',
+UUID_BACKEND = 'djangocms_moderation.backends.uuid4_backend'
+SEQUENTIAL_NUMBER_BACKEND = 'djangocms_moderation.backends.sequential_number_backend'
+SEQUENTIAL_NUMBER_WITH_IDENTIFIER_PREFIX_BACKEND = 'djangocms_moderation.backends.sequential_number_with_identifier_prefix_backend'
+
+CORE_COMPLIANCE_NUMBER_BACKENDS = (
+    (UUID_BACKEND, _('Unique alpha-numeric string')),
+    (SEQUENTIAL_NUMBER_BACKEND, _('Sequential number')),
+    (SEQUENTIAL_NUMBER_WITH_IDENTIFIER_PREFIX_BACKEND, _('Sequential number with identifier prefix')),
 )
 
-CORE_REFERENCE_NUMBER_BACKENDS = (
-    (DEFAULT_REFERENCE_NUMBER_BACKEND, _('Default')),
-)
+DEFAULT_COMPLIANCE_NUMBER_BACKEND = getattr(settings, 'CMS_MODERATION_DEFAULT_COMPLIANCE_NUMBER_BACKEND', UUID_BACKEND)
 
-REFERENCE_NUMBER_BACKENDS = getattr(
-    settings,
-    'CMS_MODERATION_REFERENCE_NUMBER_BACKENDS',
-    CORE_REFERENCE_NUMBER_BACKENDS,
-)
+COMPLIANCE_NUMBER_BACKENDS = getattr(settings, 'CMS_MODERATION_COMPLIANCE_NUMBER_BACKENDS', CORE_COMPLIANCE_NUMBER_BACKENDS)
 
 ENABLE_WORKFLOW_OVERRIDE = getattr(settings, 'CMS_MODERATION_ENABLE_WORKFLOW_OVERRIDE', False)
 
