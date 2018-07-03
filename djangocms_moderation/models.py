@@ -340,7 +340,7 @@ class PageModerationRequest(models.Model):
     def __str__(self):
         return "{} {}".format(
             self.pk,
-            self.page.get_page_title(self.language)
+            self.content_object.get_page_title(self.language)
         )
 
     @cached_property
