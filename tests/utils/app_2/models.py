@@ -7,3 +7,4 @@ class TestModel1(BaseVersion):
 
 class TestModel2(BaseVersion):
     pass
+

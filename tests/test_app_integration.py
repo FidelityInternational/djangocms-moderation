@@ -66,3 +66,4 @@ class AppIntegrationTestCase(CMSTestCase, TestCase):
         moderation_config = apps.get_app_config('djangocms_moderation')
         registered_model = moderation_config.cms_extension.versioned_moderation_models
         self.assertEqual(len(registered_model), 4)
+
