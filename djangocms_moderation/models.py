@@ -5,6 +5,8 @@ import json
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.core.urlresolvers import reverse
 from django.db import models, transaction
@@ -192,7 +194,7 @@ class Workflow(models.Model):
 
         try:
             active_request = lookup.get()
-        except PageModerationRequest.DoesNotExist:
+        except ModerationRequest.DoesNotExist:
             active_request = None
         return active_request
 
@@ -201,9 +203,9 @@ class Workflow(models.Model):
         return lookup.exists()
 
     @transaction.atomic
-    def submit_new_request(self, by_user, page, language, message='', to_user=None):
+    def submit_new_request(self, by_user, obj, language, message='', to_user=None):
         request = self.requests.create(
-            page=page,
+            content_object=obj,
             language=language,
             is_active=True,
             workflow=self,
@@ -266,63 +268,33 @@ class WorkflowStep(models.Model):
         return self.get_next(cache=False, is_required=True)
 
 
-@python_2_unicode_compatible
-class PageModeration(PageExtension):
-    ACCESS_CHOICES = (
-        (constants.ACCESS_PAGE, _('Current page')),
-        (constants.ACCESS_CHILDREN, _('Page children (immediate)')),
-        (constants.ACCESS_PAGE_AND_CHILDREN, _('Page and children (immediate)')),
-        (constants.ACCESS_DESCENDANTS, _('Page descendants')),
-        (constants.ACCESS_PAGE_AND_DESCENDANTS, _('Page and descendants')),
-    )
-
+class ModerationCollection(models.Model):
+    name = models.CharField(verbose_name=_('name'), max_length=128)
     workflow = models.ForeignKey(
         to=Workflow,
         verbose_name=_('workflow'),
-        related_name='+',
+        related_name='moderation_collections',
     )
-    grant_on = models.IntegerField(
-        verbose_name=_('grant on'),
-        choices=ACCESS_CHOICES,
-        default=constants.ACCESS_PAGE_AND_DESCENDANTS,
-    )
-    enabled = models.BooleanField(
-        verbose_name=_('enable moderation for page'),
-        default=True,
-    )
-
-    objects = PageModerationManager()
-
-    def __str__(self):
-        return self.extended_object.get_page_title()
-
-    @cached_property
-    def page(self):
-        return self.get_page()
-
-    def copy_relations(self, oldinstance, language):
-        self.workflow_id = oldinstance.workflow_id
 
 
 @python_2_unicode_compatible
-class PageModerationRequest(models.Model):
-    page = models.ForeignKey(
-        to='cms.Page',
-        verbose_name=_('page'),
-        limit_choices_to={
-            'is_page_type': False,
-            'publisher_is_draft': True,
-        },
+class ModerationRequest(models.Model):
+    collection = models.ForeignKey(
+        to=ModerationCollection,
+        related_name='moderation_requests',
+    )
+    content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.CASCADE,
+    )
+    object_id = models.PositiveIntegerField()
+    content_object = GenericForeignKey(
+        'content_type', 'object_id'
     )
     language = models.CharField(
         verbose_name=_('language'),
         max_length=5,
         choices=settings.LANGUAGES,
-    )
-    workflow = models.ForeignKey(
-        to=Workflow,
-        verbose_name=_('workflow'),
-        related_name='requests',
     )
     is_active = models.BooleanField(
         default=False,
@@ -348,7 +320,7 @@ class PageModerationRequest(models.Model):
     def __str__(self):
         return "{} {}".format(
             self.pk,
-            self.page.get_page_title(self.language)
+            self.content_object.pk
         )
 
     @cached_property
@@ -357,6 +329,10 @@ class PageModerationRequest(models.Model):
         Author of this request is the user who created the first action
         """
         return self.get_first_action().by_user
+
+    @cached_property
+    def workflow(self):
+        return self.collection.workflow
 
     def has_pending_step(self):
         return self.get_pending_steps().exists()
@@ -505,7 +481,7 @@ class PageModerationRequest(models.Model):
 
 
 @python_2_unicode_compatible
-class PageModerationRequestAction(models.Model):
+class ModerationRequestAction(models.Model):
     action = models.CharField(
         verbose_name=_('status'),
         max_length=30,
@@ -549,7 +525,7 @@ class PageModerationRequestAction(models.Model):
         blank=True,
     )
     request = models.ForeignKey(
-        to=PageModerationRequest,
+        to=ModerationRequest,
         verbose_name=_('request'),
         related_name='actions',
     )
@@ -603,12 +579,12 @@ class PageModerationRequestAction(models.Model):
 
         if next_step:
             self.to_role_id = next_step.role_id
-        super(PageModerationRequestAction, self).save(**kwargs)
+        super(ModerationRequestAction, self).save(**kwargs)
 
 
 class ConfirmationFormSubmission(models.Model):
     request = models.ForeignKey(
-        to=PageModerationRequest,
+        to=ModerationRequest,
         verbose_name=_('request'),
         related_name='form_submissions',
         on_delete=models.CASCADE,
@@ -651,6 +627,3 @@ class ConfirmationFormSubmission(models.Model):
 
     def get_form_data(self):
         return json.loads(self.data)
-
-
-extension_pool.register(PageModeration)
