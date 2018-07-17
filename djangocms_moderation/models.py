@@ -14,12 +14,9 @@ from django.utils.encoding import python_2_unicode_compatible
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext, ugettext_lazy as _
 
-from cms.extensions import PageExtension
-from cms.extensions.extension_pool import extension_pool
 from cms.models.fields import PlaceholderField
 
 from .emails import notify_request_author, notify_requested_moderator
-from .managers import PageModerationManager
 from .utils import generate_compliance_number
 
 
@@ -269,12 +266,60 @@ class WorkflowStep(models.Model):
 
 
 class ModerationCollection(models.Model):
+    author = models.ForeignKey(
+        to=settings.AUTH_USER_MODEL,
+        verbose_name=_('author'),
+        related_name='+',
+        on_delete=models.CASCADE,
+    )
     name = models.CharField(verbose_name=_('name'), max_length=128)
     workflow = models.ForeignKey(
         to=Workflow,
         verbose_name=_('workflow'),
         related_name='moderation_collections',
     )
+
+    def add_object(self, obj):
+        """
+        Add object to the ModerationRequest in this collection.
+        :return: <ModerationRequest|None>
+        """
+        content_type = ContentType.objects.get_for_model(obj)
+        # Object can ever be part of only one collection
+        # TODO: collection will have a "status", so we know when the collection
+        # is active or cancelled etc..
+        existing_request_exists = ModerationRequest.objects.filter(
+            content_type=content_type,
+            object_id=obj.pk,
+        ).exclude(collection=self).exists()
+
+        if not existing_request_exists:
+            return ModerationRequest.objects.get_or_create(
+                content_type=content_type,
+                object_id=obj.pk,
+                collection=self,
+            )
+        return None
+
+    def remove_object(self, obj):
+        """
+        Removing the object from the collection basically means deleting the
+        moderation request associated with this collection.
+        :return: <bool>
+        """
+        try:
+            content_type = ContentType.objects.get_for_model(obj)
+            moderation_request = ModerationRequest.objects.get(
+                content_type=content_type,
+                object_id=obj.pk,
+                collection=self
+            )
+        except ModerationRequest.DoesNotExist:
+            # Nothing to remove
+            return False
+
+        moderation_request.delete()
+        return True
 
 
 @python_2_unicode_compatible
