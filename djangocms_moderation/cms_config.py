@@ -15,7 +15,7 @@ class ModerationExtension(CMSAppExtension):
         if not versioning_enabled:
             raise ImproperlyConfigured('Versioning needs to be enabled for Moderation')
 
-        if not isinstance(m oderated_models, (tuple, list)):
+        if not isinstance(moderated_models, (tuple, list)):
             raise ImproperlyConfigured('moderated_models need to be a list of Models')
 
         for moderated_model in moderated_models:
@@ -23,4 +23,4 @@ class ModerationExtension(CMSAppExtension):
                 raise ImproperlyConfigured('Moderated models need to be Versionable, please include every \
                 model that needs to be moderated in ythe versioning_models entry')
 
-        self.moderated_models = moderated_models
+        self.moderated_models.extend(moderated_models)

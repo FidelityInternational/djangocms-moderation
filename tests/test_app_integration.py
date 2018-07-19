@@ -1,12 +1,10 @@
 from unittest.mock import Mock
 from unittest import TestCase
 
-
 from django.core.exceptions import ImproperlyConfigured
 
 from cms import app_registration
 from cms.test_utils.testcases import CMSTestCase
-
 
 from djangocms_moderation.cms_config import ModerationExtension
 from .utils.app_1.models import (
