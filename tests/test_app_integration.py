@@ -40,7 +40,7 @@ class AppIntegrationTestCase(CMSTestCase, TestCase):
         extension = ModerationExtension()
         cms_config = Mock(
             djangocms_moderation_enabled=True,
-            versioned_moderation_models=23234,
+            moderated_models=23234,
             app_config=Mock(label='blah_cms_config')
         )
 
@@ -51,19 +51,14 @@ class AppIntegrationTestCase(CMSTestCase, TestCase):
         extension = ModerationExtension()
         cms_config = Mock(
             djangocms_moderation_enabled=True,
-            versioned_moderation_models=[TestModel1, TestModel2, TestModel3, TestModel4],
+            moderated_models=[TestModel1, TestModel2, TestModel3, TestModel4],
+            versioning_models=[TestModel1, TestModel2, TestModel3, TestModel4],
             app_config=Mock(label='blah_cms_config')
         )
     
         extension.configure_app(cms_config)
-        self.assertTrue(TestModel1 in extension.versioned_moderation_models)
-        self.assertTrue(TestModel2 in extension.versioned_moderation_models)
-        self.assertTrue(TestModel3 in extension.versioned_moderation_models)
-        self.assertTrue(TestModel4 in extension.versioned_moderation_models)
-
-    def test_config_with_two_apps(self):
-        setup_cms_apps()
-        moderation_config = apps.get_app_config('djangocms_moderation')
-        registered_model = moderation_config.cms_extension.versioned_moderation_models
-        self.assertEqual(len(registered_model), 4)
+        self.assertTrue(TestModel1 in extension.moderated_models)
+        self.assertTrue(TestModel2 in extension.moderated_models)
+        self.assertTrue(TestModel3 in extension.moderated_models)
+        self.assertTrue(TestModel4 in extension.moderated_models)
 
