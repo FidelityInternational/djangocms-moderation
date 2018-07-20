@@ -1,10 +1,12 @@
 from unittest.mock import Mock
 from unittest import TestCase
 
+from django.apps import apps
 from django.core.exceptions import ImproperlyConfigured
 
 from cms import app_registration
 from cms.test_utils.testcases import CMSTestCase
+from cms.utils.setup import setup_cms_apps
 
 from djangocms_moderation.cms_config import ModerationExtension
 from .utils.app_1.models import (
@@ -17,7 +19,7 @@ from .utils.app_2.models import (
 )
 
 
-class AppIntegrationTestCase(CMSTestCase, TestCase):
+class CMSConfigTest(CMSTestCase, TestCase):
 
     def setUp(self):
         app_registration.get_cms_extension_apps.cache_clear()
@@ -70,3 +72,17 @@ class AppIntegrationTestCase(CMSTestCase, TestCase):
         self.assertTrue(TestModel2 in extension.moderated_models)
         self.assertTrue(TestModel3 in extension.moderated_models)
         self.assertTrue(TestModel4 in extension.moderated_models)
+
+
+class CMSConfigIntegrationTest(CMSTestCase):
+
+    def setUp(self):
+        app_registration.get_cms_extension_apps.cache_clear()
+        app_registration.get_cms_config_apps.cache_clear()
+
+    def test_config_with_two_apps(self):
+        setup_cms_apps()
+        moderation_config = apps.get_app_config('djangocms_moderation')
+        registered_model = moderation_config.cms_extension.moderated_models
+
+        self.assertEqual(len(registered_model), 4)
