@@ -8,6 +8,7 @@ from django.utils.translation import ugettext, ugettext_lazy as _
 
 from cms.admin.placeholderadmin import PlaceholderAdminMixin
 from cms.models import Page
+from cms.toolbar.items import Button
 
 from adminsortable2.admin import SortableInlineAdminMixin
 
@@ -109,6 +110,15 @@ class ModerationRequestAdmin(admin.ModelAdmin):
                 pass
             else:
                 extra_context = dict(collection=collection)
+                if collection.allow_submit_for_moderation:
+                    submit_for_moderation_url = reverse(
+                        'admin:cms_moderation_submit_collection_for_moderation',
+                        args=(collection_id,)
+                    )
+                    submit_for_moderation_button = Button(
+                        'Submit for review', submit_for_moderation_url
+                    )
+                    extra_context['submit_for_moderation_button'] = submit_for_moderation_button
         return super(ModerationRequestAdmin, self).changelist_view(request, extra_context)
 
     def get_status(self, obj):
@@ -118,16 +128,33 @@ class ModerationRequestAdmin(admin.ModelAdmin):
             next_step = obj.get_next_required()
             role = next_step.role.name
             status = ugettext('Pending %(role)s approval') % {'role': role}
-        else:
+        elif obj.get_last_action():
             last_action = obj.get_last_action()
+            # We can have moderation requests without any action (e.g. the
+            # ones not submitted for moderation yet)
             user_name = last_action.get_by_user_name()
             message_data = {
                 'action': last_action.get_action_display(),
                 'name': user_name,
             }
             status = ugettext('%(action)s by %(name)s') % message_data
+        else:
+            status = ugettext('Ready for submission')
         return status
     get_status.short_description = _('Status')
+
+    def get_urls(self):
+        def _url(regex, fn, name, **kwargs):
+            return url(regex, self.admin_site.admin_view(fn), kwargs=kwargs, name=name)
+
+        url_patterns = [
+            _url(
+                '^collection/(?P<collection_id>\d+)/submit-for-review/$',
+                views.submit_collection_for_moderation,
+                name="cms_moderation_submit_collection_for_moderation",
+            ),
+        ]
+        return url_patterns + super(ModerationRequestAdmin, self).get_urls()
 
 
 class RoleAdmin(admin.ModelAdmin):
@@ -203,11 +230,6 @@ class ExtendedPageAdmin(PageAdmin):
             return url(regex, self.admin_site.admin_view(fn), kwargs=kwargs, name=name)
 
         url_patterns = [
-            _url(
-                r'^([0-9]+)/([a-z\-]+)/moderation/new/$',
-                views.new_moderation_request,
-                'new_request',
-            ),
             _url(
                 r'^([0-9]+)/([a-z\-]+)/moderation/resubmit/$',
                 views.resubmit_moderation_request,

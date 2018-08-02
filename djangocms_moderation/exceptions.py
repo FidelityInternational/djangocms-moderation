@@ -1,3 +1,7 @@
+class CollectionCantBeSubmittedForModeration(Exception):
+    pass
+
+
 class ObjectAlreadyInCollection(Exception):
     pass
 

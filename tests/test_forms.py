@@ -4,54 +4,9 @@ from django.contrib.auth.models import User
 from django.forms import HiddenInput
 
 from djangocms_moderation import constants
-from djangocms_moderation.forms import (
-    ModerationRequestForm,
-    UpdateModerationRequestForm,
-)
+from djangocms_moderation.forms import UpdateModerationRequestForm
 
 from .utils.base import BaseTestCase
-
-
-class ModerationRequestFormTest(BaseTestCase):
-
-    def test_form_init(self):
-        form = ModerationRequestForm(
-            action=constants.ACTION_STARTED,
-            language='en',
-            page=self.pg2,
-            user=self.user,
-            workflow=self.wf1,
-            active_request=None,
-        )
-        self.assertIn('moderator', form.fields)
-        field_moderator = form.fields['moderator']
-        self.assertEqual(field_moderator.empty_label, 'Any Role 1')
-        self.assertQuerysetEqual(field_moderator.queryset, User.objects.none())
-
-    def test_form_save(self):
-        data = {
-            'moderator': None,
-            'message': 'Some message'
-        }
-        form = ModerationRequestForm(
-            data,
-            action=constants.ACTION_STARTED,
-            language='en',
-            page=self.pg2,
-            user=self.user,
-            workflow=self.wf1,
-            active_request=None,
-        )
-        form.workflow.submit_new_request = MagicMock()
-        self.assertTrue(form.is_valid())
-        form.save()
-        form.workflow.submit_new_request.assert_called_once_with(
-            obj=self.pg2,
-            by_user=self.user,
-            to_user=None,
-            language='en',
-            message='Some message',
-        )
 
 
 class UpdateModerationRequestFormTest(BaseTestCase):
@@ -65,7 +20,6 @@ class UpdateModerationRequestFormTest(BaseTestCase):
             workflow=self.wf1,
             active_request=self.moderation_request1,
         )
-        self.assertIsInstance(form, ModerationRequestForm)
         field_moderator = form.fields['moderator']
         self.assertEqual(field_moderator.empty_label, 'Any Role 2')
         self.assertQuerysetEqual(
