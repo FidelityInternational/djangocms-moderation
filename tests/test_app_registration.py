@@ -38,6 +38,7 @@ class CMSConfigTest(CMSTestCase, TestCase):
         with self.assertRaisesMessage(ImproperlyConfigured, err_msg):
             extension.configure_app(cms_config)
 
+
     @patch('django.apps.apps.get_app_config')
     def test_model_not_in_versionables_by_content(self, get_app_config):
         extension = ModerationExtension()
@@ -54,14 +55,16 @@ class CMSConfigTest(CMSTestCase, TestCase):
         with self.assertRaisesMessage(ImproperlyConfigured, err_msg):
             extension.configure_app(cms_config)
 
-
 class CMSConfigIntegrationTest(CMSTestCase):
 
     def setUp(self):
         app_registration.get_cms_extension_apps.cache_clear()
         app_registration.get_cms_config_apps.cache_clear()
-        self.moderated_models = (App2PostContent, App2TitleContent,
-                                 App1PostContent, App1TitleContent)
+
+        self.moderated_models = (
+            App2PostContent, App2TitleContent,
+            App1PostContent, App1TitleContent
+        )
 
     def test_config_with_two_apps(self):
         setup_cms_apps()

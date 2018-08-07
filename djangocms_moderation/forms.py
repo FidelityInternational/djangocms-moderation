@@ -2,12 +2,15 @@ from __future__ import unicode_literals
 
 from django import forms
 from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
 from django.forms.forms import NON_FIELD_ERRORS
 from django.utils.translation import ugettext, ugettext_lazy as _
 
 from adminsortable2.admin import CustomInlineFormSet
 
 from .constants import ACTION_CANCELLED, ACTION_REJECTED, ACTION_RESUBMITTED
+from .helpers import get_content_object
+from .models import ModerationCollection, ModerationRequest
 
 
 class WorkflowStepInlineFormSet(CustomInlineFormSet):
@@ -96,6 +99,54 @@ class UpdateModerationRequestForm(forms.Form):
             to_user=self.cleaned_data.get('moderator'),
             message=self.cleaned_data['message'],
         )
+
+
+class CollectionItemForm(forms.Form):
+
+    collection_id = forms.IntegerField()
+    content_object_id = forms.IntegerField()
+
+    def clean_collection_id(self):
+        """
+        Validated collection_id, ensure it is not locked. 
+        :return:
+        """
+        collection = ModerationCollection.objects.get(
+            pk=self.cleaned_data['collection_id']
+        )
+
+        if collection.is_locked:
+            raise forms.ValidationError(
+                _("Can't add the object to the collection, because it is locked")
+            )
+
+        self.cleaned_data['collection'] = collection
+
+    def clean_content_object_id(self):
+        """
+        Validates content_object_id: Checks that a given content_object_id has
+        a content_object and it is not currently part of any ModerationRequest
+
+        :return:
+        """
+        content_object = get_content_object(self.cleaned_data['content_object_id'])
+
+        if not content_object:
+            raise forms.ValidationError(_('Invalid content_object_id, does not exist'))
+
+        content_type = ContentType.objects.get_for_model(content_object)
+        request_with_object_exists = ModerationRequest.objects.filter(
+            content_type=content_type,
+            object_id=content_object.pk,
+        ).exists()
+
+        if request_with_object_exists:
+            raise forms.ValidationError(_(
+                "{} is already part of existing moderation request which is part "
+                "of another active collection".format(content_object)
+            ))
+
+        self.cleaned_data['content_object'] = content_object
 
 
 class SubmitCollectionForModerationForm(forms.Form):
