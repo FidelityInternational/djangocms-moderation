@@ -5,6 +5,7 @@ from django.contrib import admin
 from django.core.urlresolvers import reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import ugettext, ugettext_lazy as _
+from django.contrib.admin.models import LogEntry
 
 from cms.admin.placeholderadmin import PlaceholderAdminMixin
 
@@ -166,6 +167,11 @@ class ModerationCollectionAdmin(admin.ModelAdmin):
         'date_created',
     ]
 
+    def get_changeform_initial_data(self, request):
+        initial = super().get_changeform_initial_data(request)
+        initial['author'] = request.user
+        return initial
+
     def get_name_with_requests_link(self, obj):
         """
         Name of the collection should link to the list of associated
@@ -268,6 +274,6 @@ admin.site.register(ModerationRequest, ModerationRequestAdmin)
 admin.site.register(ModerationCollection, ModerationCollectionAdmin)
 admin.site.register(Role, RoleAdmin)
 admin.site.register(Workflow, WorkflowAdmin)
-
+admin.site.register(LogEntry)
 admin.site.register(ConfirmationPage, ConfirmationPageAdmin)
 admin.site.register(ConfirmationFormSubmission, ConfirmationFormSubmissionAdmin)
