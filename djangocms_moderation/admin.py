@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 from django.conf.urls import url
 from django.contrib import admin
 from django.core.urlresolvers import reverse
+from django.http import Http404
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import ugettext, ugettext_lazy as _
 
@@ -10,6 +11,7 @@ from cms.admin.placeholderadmin import PlaceholderAdminMixin
 
 from adminsortable2.admin import SortableInlineAdminMixin
 
+from .admin_actions import publish_selected
 from .forms import WorkflowStepInlineFormSet
 from .helpers import get_form_submission_for_step
 from .models import (
@@ -65,13 +67,14 @@ class ModerationRequestActionInline(admin.TabularInline):
 
 
 class ModerationRequestAdmin(admin.ModelAdmin):
-    actions = None  # remove `delete_selected` for now, it will be handled later
+    actions = [publish_selected]
     inlines = [ModerationRequestActionInline]
     list_display = ['id', 'content_type', 'get_title', 'collection', 'get_preview_link', 'get_status']
     list_filter = ['collection']
     fields = ['id', 'collection', 'workflow', 'is_active', 'get_status']
     readonly_fields = fields
     change_list_template = 'djangocms_moderation/moderation_request_change_list.html'
+    collection = None
 
     def get_title(self, obj):
         return obj.content_object
@@ -85,6 +88,13 @@ class ModerationRequestAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if not self.collection or not self.collection.allow_pre_flight(request.user):
+            if 'publish_selected' in actions:
+                del actions['publish_selected']
+        return actions
+
     def changelist_view(self, request, extra_context=None):
         # If we filter by a specific collection, we want to add this collection
         # to the context
@@ -92,6 +102,7 @@ class ModerationRequestAdmin(admin.ModelAdmin):
         if collection_id:
             try:
                 collection = ModerationCollection.objects.get(pk=int(collection_id))
+                self.collection = collection
             except (ValueError, ModerationCollection.DoesNotExist):
                 pass
             else:
@@ -102,12 +113,22 @@ class ModerationRequestAdmin(admin.ModelAdmin):
                         args=(collection_id,)
                     )
                     extra_context['submit_for_review_url'] = submit_for_review_url
+        else: 
+            # If no collection id, then don't show all requests 
+            # as each collection's actions, buttons and privileges may differ
+            raise Http404
+
         return super(ModerationRequestAdmin, self).changelist_view(request, extra_context)
 
     def get_status(self, obj):
         last_action = obj.get_last_action()
         if obj.is_approved():
             status = ugettext('Ready for publishing')
+
+        # TODO: consider published status for version e.g.:
+        # elif obj.content_object.is_published():
+        #     status = ugettext('Published')
+
         elif obj.is_active and obj.has_pending_step():
             next_step = obj.get_next_required()
             role = next_step.role.name
@@ -164,6 +185,21 @@ class ModerationCollectionAdmin(admin.ModelAdmin):
         'status',
         'date_created',
     ]
+    editonly_fields = ('status',)  # fields editable only on EDIT
+    addonly_fields = ('workflow',)  # fields editable only on CREATE
+
+    def get_readonly_fields(self, request, obj=None):
+        """
+        Override to provide editonly_fields and addonly_fields functionality
+        """
+        if obj:  # Editing an existing object
+            if hasattr(self, 'addonly_fields'):
+                return self.readonly_fields + self.addonly_fields
+            return self.readonly_fields
+        else:  # Adding a new object
+            if hasattr(self, 'editonly_fields'):
+                return self.readonly_fields + self.editonly_fields
+            return self.readonly_fields
 
     def get_name_with_requests_link(self, obj):
         """
