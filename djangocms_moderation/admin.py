@@ -10,6 +10,7 @@ from django.utils.translation import ugettext, ugettext_lazy as _
 from cms.admin.placeholderadmin import PlaceholderAdminMixin
 
 from adminsortable2.admin import SortableInlineAdminMixin
+from djangocms_versioning.constants import DRAFT
 
 from .admin_actions import (
     approve_selected,
@@ -102,10 +103,14 @@ class ModerationRequestAdmin(admin.ModelAdmin):
         return False
 
     def get_list_display(self, request):
-        list_display = ['id', 'version', 'get_title', 'get_content_author', 'get_preview_link', 'get_status']
+        list_display = ['id', 'get_content_type', 'get_title', 'get_content_author', 'get_preview_link', 'get_status']
         if conf.REQUEST_COMMENTS_ENABLED:
             list_display.append('get_comments_link')
         return list_display
+
+    def get_content_type(self, obj):
+        return obj.version.content_type
+    get_content_type.short_description = _('Content type')
 
     def get_title(self, obj):
         return obj.version.content
@@ -163,11 +168,15 @@ class ModerationRequestAdmin(admin.ModelAdmin):
                 # `publish_selected` is possible.
                 _max_to_keep = 1  # publish_selected
 
-            for mr in collection.moderation_requests.all():
+            for mr in collection.moderation_requests.all().select_related('version'):
                 if len(actions_to_keep) == _max_to_keep:
                     break  # We have found all the actions, so no need to loop anymore
                 if 'publish_selected' not in actions_to_keep:
-                    if mr.is_approved() and request.user == collection.author:
+                    if all([
+                        request.user == collection.author,
+                        mr.version.state == DRAFT,
+                        mr.is_approved(),
+                    ]):
                         actions_to_keep.append('publish_selected')
                 if collection.status == IN_REVIEW and 'approve_selected' not in actions_to_keep:
                     if mr.user_can_take_moderation_action(request.user):
@@ -216,17 +225,16 @@ class ModerationRequestAdmin(admin.ModelAdmin):
         last_action = obj.get_last_action()
 
         if last_action:
-            if obj.is_approved():
+            if obj.is_approved() and obj.version.state == DRAFT:
                 status = ugettext('Ready for publishing')
-            # TODO: consider published status for version e.g.:
-            # elif obj.content_object.is_published():
-            #     status = ugettext('Published')
             elif obj.is_rejected():
                 status = ugettext('Pending author rework')
             elif obj.is_active and obj.has_pending_step():
                 next_step = obj.get_next_required()
                 role = next_step.role.name
                 status = ugettext('Pending %(role)s approval') % {'role': role}
+            elif obj.version.state != DRAFT:
+                status = obj.version.get_state_display()
             else:
                 user_name = last_action.get_by_user_name()
                 message_data = {
