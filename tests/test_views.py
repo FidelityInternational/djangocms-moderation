@@ -7,12 +7,11 @@ from django.utils.translation import ugettext_lazy as _
 
 from cms.utils.urlutils import add_url_parameters
 
-from djangocms_versioning.test_utils.factories import PageVersionFactory
-
 from djangocms_moderation import constants
 from djangocms_moderation.forms import CollectionItemForm
 from djangocms_moderation.models import ModerationCollection, ModerationRequest
 from djangocms_moderation.utils import get_admin_url
+from djangocms_versioning.test_utils.factories import PageVersionFactory
 
 from .utils.base import BaseViewTestCase
 
@@ -44,7 +43,7 @@ class CollectionItemViewTest(BaseViewTestCase):
 
         self.assertEqual(response.context_data['title'], _('Add to collection'))
 
-    def test_add_object_to_collections(self):
+    def test_version_object_to_collections(self):
         ModerationRequest.objects.all().delete()
         self.client.force_login(self.user)
         response = self.client.post(
@@ -141,7 +140,7 @@ class CollectionItemViewTest(BaseViewTestCase):
         moderation_requests = ModerationRequest.objects.filter(collection=self.collection_2)
         # moderation request is content_object
         for mod_request in moderation_requests:
-            self.assertTrue(mod_request in response.context_data['content_object_list'])
+            self.assertTrue(mod_request in response.context_data['moderation_request_list'])
 
     def test_version_id_from_params(self):
         self.client.force_login(self.user)
