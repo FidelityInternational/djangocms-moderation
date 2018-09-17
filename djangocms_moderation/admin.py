@@ -48,7 +48,6 @@ from . import views  # isort:skip
 class ModerationRequestActionInline(admin.TabularInline):
     model = ModerationRequestAction
     fields = ['show_user', 'message', 'date_taken', 'form_submission']
-    readonly_fields = ['show_user', 'date_taken', 'form_submission']
     verbose_name = _('Action')
     verbose_name_plural = _('Actions')
 
@@ -80,6 +79,11 @@ class ModerationRequestActionInline(admin.TabularInline):
             obj.step_approved.role.name
         )
     form_submission.short_description = _('Form Submission')
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and request.user == obj.author:
+            return ['show_user', 'date_taken', 'form_submission']
+        return self.fields
 
 
 class ModerationRequestAdmin(admin.ModelAdmin):
@@ -304,6 +308,21 @@ class CollectionCommentAdmin(admin.ModelAdmin):
 
         return super().changelist_view(request, extra_context)
 
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        collection_comment = CollectionComment.objects.get(pk=int(object_id))
+        if not (request.user == collection_comment.author):
+            extra_context['readonly'] = True
+        return super().change_view(request, object_id,
+                                   form_url, extra_context=extra_context)
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user == getattr(obj, 'author', None)
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and not (request.user == obj.author):
+            return self.list_display
+
 
 class RequestCommentAdmin(admin.ModelAdmin):
     list_display = ['message', 'get_request_link', 'author', 'date_created']
@@ -364,6 +383,21 @@ class RequestCommentAdmin(admin.ModelAdmin):
             raise Http404
 
         return super().changelist_view(request, extra_context)
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        request_comment = RequestComment.objects.get(pk=int(object_id))
+        if not (request.user == request_comment.author):
+            extra_context['readonly'] = True
+        return super().change_view(request, object_id,
+                                   form_url, extra_context=extra_context)
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user == getattr(obj, 'author', None)
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and not (request.user == obj.author):
+            return self.list_display
 
 
 class WorkflowStepInline(SortableInlineAdminMixin, admin.TabularInline):
