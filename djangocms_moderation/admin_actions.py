@@ -1,14 +1,21 @@
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.http import HttpResponseRedirect
 from django.utils.translation import ugettext_lazy as _, ungettext
 
+from cms.utils.urlutils import add_url_parameters
+
 from django_fsm import TransitionNotAllowed
+from djangocms_versioning.helpers import override_default_manager
+from djangocms_versioning.models import Version
 
 from djangocms_moderation import constants
 from djangocms_moderation.emails import (
     notify_collection_author,
     notify_collection_moderators,
 )
+
+from .utils import get_admin_url
 
 
 def resubmit_selected(modeladmin, request, queryset):
@@ -219,6 +226,43 @@ def publish_selected(modeladmin, request, queryset):
 
     post_bulk_actions(request._collection)
 publish_selected.short_description = _("Publish selected requests")  # noqa: E305
+
+
+def queryset_version_ids(queryset):
+    """Returns the version object keys corresponding to the objects in the Haystack queryset"""
+    version_ids = []
+    for obj in queryset:
+        try:
+            with override_default_manager(obj.model, obj.model._original_manager):
+                # We need to override the default manager as haystack incorrectly uses
+                # model._default_manager which results in the PublishedContentManager being used
+                version = Version.objects.get_for_content(obj.object)
+                version_ids.append(str(version.pk))
+        except Version.DoesNotExist:
+            pass
+
+    return version_ids
+
+
+def add_items_to_collection(modeladmin, request, queryset):
+    """
+    Action to add queryset to moderation collection. Note that queryset is a
+    Haystack SearchQuerySet
+    """
+    version_id_list = queryset_version_ids(queryset)
+    if version_id_list:
+        admin_url = add_url_parameters(
+            get_admin_url(
+                name='cms_moderation_items_to_collection',
+                language=request.GET.get('language'),
+                args=()
+            ), version_ids=','.join(version_id_list),
+            return_to_url=request.META.get('HTTP_REFERER'))
+        return HttpResponseRedirect(admin_url)
+    else:
+        messages.success(request, _("No suitable items found to add to moderation collection"))
+        return HttpResponseRedirect(request.META.get('HTTP_REFERER'))
+add_items_to_collection.short_description = _("Add to moderation collection")  # noqa: E305
 
 
 def post_bulk_actions(collection):
