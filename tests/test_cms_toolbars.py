@@ -1,6 +1,7 @@
 import mock
 
 from django.test.client import RequestFactory
+from django.urls import reverse
 
 from cms.middleware.toolbar import ToolbarMiddleware
 from cms.toolbar.toolbar import CMSToolbar
@@ -64,6 +65,17 @@ class TestCMSToolbars(BaseTestCase):
     def _button_exists(self, button_name, toolbar):
         found = self._find_buttons(button_name, toolbar)
         return bool(len(found))
+
+    def _find_menu(self, name, toolbar):
+        for item in toolbar.get_left_items():
+            if item.name == name:
+                return item
+
+    def _find_menu_item(self, name, menu):
+        name += '...'  # always added to menu items
+        for item in menu.items:
+            if item.name == name:
+                return item
 
     def test_submit_for_moderation_not_version_locked(self):
         ModerationRequest.objects.all().delete()
@@ -188,3 +200,19 @@ class TestCMSToolbars(BaseTestCase):
         toolbar.post_template_populate()
 
         self.assertTrue(self._button_exists('Edit', toolbar.toolbar))
+
+    def test_add_manage_collection_item_to_moderation_menu(self):
+        version = PageVersionFactory(created_by=self.user)
+        toolbar = self._get_toolbar(version.content, preview_mode=True, user=self.user)
+        toolbar.populate()
+        toolbar.post_template_populate()
+
+        moderation_menu = self._find_menu('Moderation', toolbar.toolbar)
+        self.assertNotEqual(None, moderation_menu)
+
+        manage_collection_item = self._find_menu_item('Manage Collections', moderation_menu)
+        self.assertNotEqual(None, manage_collection_item)
+
+        collection_list_url = reverse('admin:djangocms_moderation_moderationcollection_changelist')
+        collection_list_url += "?author__id__exact=%s" % self.user.pk
+        self.assertTrue(manage_collection_item.url, collection_list_url)
