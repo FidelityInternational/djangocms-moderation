@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 from django import forms
 from django.conf.urls import url
 from django.contrib import admin
+from django.contrib.auth.models import User
 from django.core.urlresolvers import reverse
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -23,6 +24,7 @@ from .admin_actions import (
     resubmit_selected,
 )
 from .constants import ARCHIVED, COLLECTING, IN_REVIEW
+from .filters import ReviewerFilter
 from .forms import (
     CollectionCommentForm,
     ModerationRequestActionInlineForm,
@@ -513,6 +515,7 @@ class ModerationCollectionAdmin(admin.ModelAdmin):
         'author',
         'status',
         'date_created',
+        ReviewerFilter,
     ]
     list_display_links = None
 
@@ -523,6 +526,7 @@ class ModerationCollectionAdmin(admin.ModelAdmin):
             'author',
             'workflow',
             'status',
+            'reviewers',
             'date_created',
             'list_display_actions',
         ]
@@ -630,6 +634,15 @@ class ModerationCollectionAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def changelist_view(self, request, extra_context=None):
+        if 'reviewer' not in request.GET:
+            if request.user in User.objects.filter(moderationrequestaction__isnull=False):
+                q = request.GET.copy()
+                q['reviewer'] = request.user.pk
+                request.GET = q
+                request.META['QUERY_STRING'] = request.GET.urlencode()
+        return super().changelist_view(request, extra_context=extra_context)
 
 
 class ConfirmationPageAdmin(PlaceholderAdminMixin, admin.ModelAdmin):
