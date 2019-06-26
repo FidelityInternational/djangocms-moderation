@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils.encoding import force_text
 from django.utils.translation import ugettext_lazy as _
 
-from .conf import EMAIL_FAIL_SILENTLY
+from .conf import EMAIL_NOTIFICATIONS_FAIL_SILENTLY
 from .utils import get_absolute_url
 
 
@@ -50,7 +50,7 @@ def _send_email(
         to=recipients,
     )
     return message.send(
-        fail_silently=EMAIL_FAIL_SILENTLY
+        fail_silently=EMAIL_NOTIFICATIONS_FAIL_SILENTLY
     )
 
 
