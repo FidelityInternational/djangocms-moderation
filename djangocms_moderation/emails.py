@@ -42,13 +42,20 @@ def _send_email(
     subject = force_text(subject)
     content = render_to_string(template, context)
 
+    # Decide if the email should fail silently
+    should_fail_silently = False
+    if hasattr(settings, 'EMAIL_FAIL_SILENTLY')
+        should_fail_silently = settings.EMAIL_FAIL_SILENTLY
+
     message = EmailMessage(
         subject=subject,
         body=content,
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=recipients,
     )
-    return message.send()
+    return message.send(
+        fail_silently=should_fail_silently
+    )
 
 
 def notify_collection_author(collection, moderation_requests, action, by_user):
