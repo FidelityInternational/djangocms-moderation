@@ -6,6 +6,10 @@ Unreleased
 ==========
 
 * fix: Treebeard support improved by inheriting a treebeard template
+* Python 3.10 support added
+* Python 3.7 support removed
+* Django 4.2 support added
+* Django CMS 4.1 support added
 
 2.1.6 (2022-09-07)
 ==================

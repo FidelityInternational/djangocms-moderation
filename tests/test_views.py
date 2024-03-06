@@ -638,7 +638,7 @@ class CollectionItemsViewTest(CMSTestCase):
         self.assertEqual(
             response.context["form"].initial["collection"], str(collection.pk)
         )
-        self.assertQuerysetEqual(
+        self.assertQuerySetEqual(
             response.context["form"].initial["versions"],
             [pg_version.pk, poll_version.pk],
             transform=lambda o: o.pk,
@@ -654,7 +654,7 @@ class CollectionItemsViewTest(CMSTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context["form"].initial.keys()), 1)
-        self.assertQuerysetEqual(
+        self.assertQuerySetEqual(
             response.context["form"].initial["versions"],
             [pg_version.pk, poll_version.pk],
             transform=lambda o: o.pk,
