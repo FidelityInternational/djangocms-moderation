@@ -83,7 +83,7 @@ class CollectionItemsView(FormView):
         """
         return_to_url = self.request.GET.get("return_to_url")
         if return_to_url:
-            url_is_safe = is_safe_url(
+            url_is_safe = url_has_allowed_host_and_scheme(
                 url=return_to_url,
                 allowed_hosts=self.request.get_host(),
                 require_https=self.request.is_secure(),
